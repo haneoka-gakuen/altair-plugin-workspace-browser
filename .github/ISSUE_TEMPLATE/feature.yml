@@ -1,0 +1,17 @@
+name: Workspace capability
+description: Propose a browser workspace or asset capability
+title: "[Proposal] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+    validations:
+      required: true
+  - type: textarea
+    id: lifecycle
+    attributes:
+      label: Permission and lifecycle behavior
+    validations:
+      required: true

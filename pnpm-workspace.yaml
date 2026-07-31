@@ -1,0 +1,12 @@
+packages:
+  - "."
+  - ".dependencies/altair"
+  - ".dependencies/vega"
+  - ".dependencies/vega/packages/protocol"
+  - ".dependencies/vega-plugin-richtext"
+  - ".dependencies/vega-ui-portable"
+
+linkWorkspacePackages: true
+
+allowBuilds:
+  esbuild: true

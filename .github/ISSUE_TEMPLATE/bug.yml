@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible browser workspace defect
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Package and version
+      placeholder: "@haneoka/altair-plugin-workspace-browser 0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser, shell, and picker path
+      description: Include whether File System Access or file input was used.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
