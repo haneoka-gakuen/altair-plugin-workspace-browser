@@ -1,15 +1,8 @@
 import { defineAltairService } from "@haneoka/altair/plugins";
-import type {
-  BrowserWorkspaceDirectoryHandle,
-  BrowserWorkspacePermissionState,
-} from "./environment.js";
-import type {
-  BrowserWorkspaceDirectoryPersistence,
-  PersistedBrowserWorkspaceDirectory,
-} from "./persistence.js";
+import type { BrowserWorkspaceDirectoryHandle, BrowserWorkspacePermissionState } from "./environment.js";
+import type { BrowserWorkspaceDirectoryPersistence, PersistedBrowserWorkspaceDirectory } from "./persistence.js";
 
-export type AltairBrowserWorkspaceSource =
-  "empty" | "directory-handle" | "file-handles" | "file-input";
+export type AltairBrowserWorkspaceSource = "empty" | "directory-handle" | "file-handles" | "file-input";
 
 export interface AltairBrowserWorkspaceFile {
   readonly path: string;
@@ -27,8 +20,7 @@ export interface AltairBrowserWorkspaceSnapshot {
   readonly files: readonly AltairBrowserWorkspaceFile[];
 }
 
-export type AltairBrowserWorkspaceEventType =
-  "replace" | "refresh" | "clear" | "error";
+export type AltairBrowserWorkspaceEventType = "replace" | "refresh" | "clear" | "error";
 
 export interface AltairBrowserWorkspaceEvent {
   readonly type: AltairBrowserWorkspaceEventType;
@@ -36,9 +28,7 @@ export interface AltairBrowserWorkspaceEvent {
   readonly error?: unknown;
 }
 
-export type AltairBrowserWorkspaceListener = (
-  event: AltairBrowserWorkspaceEvent,
-) => void;
+export type AltairBrowserWorkspaceListener = (event: AltairBrowserWorkspaceEvent) => void;
 
 export interface AltairBrowserWorkspaceCapabilities {
   readonly directoryPicker: boolean;
@@ -78,8 +68,7 @@ export interface AltairBrowserWorkspaceWriteOptions extends AltairBrowserWorkspa
   readonly create?: boolean;
 }
 
-export type AltairBrowserWorkspaceWriteData =
-  string | Blob | ArrayBuffer | ArrayBufferView;
+export type AltairBrowserWorkspaceWriteData = string | Blob | ArrayBuffer | ArrayBufferView;
 
 export interface AltairBrowserWorkspaceWatchOptions {
   readonly signal?: AbortSignal;
@@ -109,9 +98,7 @@ export interface AltairBrowserWorkspaceService extends AltairBrowserWorkspaceDis
     name?: string,
   ): Promise<PersistedBrowserWorkspaceDirectory>;
   forgetDirectory(): Promise<void>;
-  pickDirectory(
-    options?: AltairBrowserWorkspacePickOptions,
-  ): Promise<AltairBrowserWorkspaceSnapshot>;
+  pickDirectory(options?: AltairBrowserWorkspacePickOptions): Promise<AltairBrowserWorkspaceSnapshot>;
   /**
    * Connects a host-restored directory handle without bypassing workspace
    * limits, permission checks, cancellation, or resource ownership.
@@ -126,47 +113,30 @@ export interface AltairBrowserWorkspaceService extends AltairBrowserWorkspaceDis
       readonly request?: boolean;
     },
   ): Promise<BrowserWorkspacePermissionState>;
-  pickFiles(
-    options?: AltairBrowserWorkspacePickOptions,
-  ): Promise<AltairBrowserWorkspaceSnapshot>;
+  pickFiles(options?: AltairBrowserWorkspacePickOptions): Promise<AltairBrowserWorkspaceSnapshot>;
   ingestFiles(
     files: Iterable<File> | ArrayLike<File>,
     options?: AltairBrowserWorkspaceIngestOptions,
   ): Promise<AltairBrowserWorkspaceSnapshot>;
-  refresh(
-    options?: AltairBrowserWorkspaceReadOptions,
-  ): Promise<AltairBrowserWorkspaceSnapshot>;
+  refresh(options?: AltairBrowserWorkspaceReadOptions): Promise<AltairBrowserWorkspaceSnapshot>;
   match(reference: string): AltairBrowserWorkspaceFile | undefined;
-  file(
-    reference: string,
-    options?: AltairBrowserWorkspaceReadOptions,
-  ): Promise<File>;
-  read(
-    reference: string,
-    options?: AltairBrowserWorkspaceReadOptions,
-  ): Promise<Uint8Array>;
+  file(reference: string, options?: AltairBrowserWorkspaceReadOptions): Promise<File>;
+  read(reference: string, options?: AltairBrowserWorkspaceReadOptions): Promise<Uint8Array>;
   write(
     reference: string,
     data: AltairBrowserWorkspaceWriteData,
     options?: AltairBrowserWorkspaceWriteOptions,
   ): Promise<AltairBrowserWorkspaceFile>;
-  url(
-    reference: string,
-    options?: AltairBrowserWorkspaceReadOptions,
-  ): Promise<string>;
+  url(reference: string, options?: AltairBrowserWorkspaceReadOptions): Promise<string>;
   subscribe(listener: AltairBrowserWorkspaceListener): () => void;
-  watch(
-    options?: AltairBrowserWorkspaceWatchOptions,
-  ): AltairBrowserWorkspaceDisposable;
+  watch(options?: AltairBrowserWorkspaceWatchOptions): AltairBrowserWorkspaceDisposable;
   clear(): void;
 }
 
-export const ALTAIR_BROWSER_WORKSPACE_SERVICE =
-  defineAltairService<AltairBrowserWorkspaceService>(
-    "haneoka.altair.workspace.browser",
-  );
+export const ALTAIR_BROWSER_WORKSPACE_SERVICE = defineAltairService<AltairBrowserWorkspaceService>(
+  "haneoka.altair.workspace.browser",
+);
 
-export const ALTAIR_BROWSER_WORKSPACE_PLUGIN_ID =
-  "haneoka.altair-workspace-browser" as const;
+export const ALTAIR_BROWSER_WORKSPACE_PLUGIN_ID = "haneoka.altair-workspace-browser" as const;
 
 export type { BrowserWorkspaceDirectoryPersistence };

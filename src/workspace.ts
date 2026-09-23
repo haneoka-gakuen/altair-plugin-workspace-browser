@@ -23,10 +23,7 @@ import {
   type BrowserWorkspaceFileHandle,
   type BrowserWorkspaceWritable,
 } from "./environment.js";
-import type {
-  BrowserWorkspaceDirectoryPersistence,
-  PersistedBrowserWorkspaceDirectory,
-} from "./persistence.js";
+import type { BrowserWorkspaceDirectoryPersistence, PersistedBrowserWorkspaceDirectory } from "./persistence.js";
 
 interface WorkspaceEntry {
   readonly info: AltairBrowserWorkspaceFile;
@@ -73,22 +70,16 @@ const MIN_WATCH_INTERVAL_MS = 100;
 let fallbackId = 0;
 
 const abortReason = (signal: AbortSignal): unknown =>
-  signal.reason ??
-  new DOMException("Browser workspace operation aborted", "AbortError");
+  signal.reason ?? new DOMException("Browser workspace operation aborted", "AbortError");
 
 const throwIfAborted = (signal: AbortSignal): void => {
   if (signal.aborted) throw abortReason(signal);
 };
 
 const aborted = (error: unknown): boolean =>
-  error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
+  error instanceof DOMException ? error.name === "AbortError" : error instanceof Error && error.name === "AbortError";
 
-const settleWithAbort = <T>(
-  operation: T | PromiseLike<T>,
-  signal: AbortSignal,
-): Promise<T> => {
+const settleWithAbort = <T>(operation: T | PromiseLike<T>, signal: AbortSignal): Promise<T> => {
   if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => {
@@ -139,11 +130,7 @@ const linkAbortSignals = (
   return { signal: controller.signal, dispose };
 };
 
-const positiveInteger = (
-  value: number | undefined,
-  fallback: number,
-  label: string,
-): number => {
+const positiveInteger = (value: number | undefined, fallback: number, label: string): number => {
   const result = value ?? fallback;
   if (!Number.isSafeInteger(result) || result <= 0) {
     throw new RangeError(`${label} must be a positive integer`);
@@ -151,11 +138,7 @@ const positiveInteger = (
   return result;
 };
 
-const finiteLimit = (
-  value: number | undefined,
-  fallback: number,
-  label: string,
-): number => {
+const finiteLimit = (value: number | undefined, fallback: number, label: string): number => {
   const result = value ?? fallback;
   if (!Number.isFinite(result) || result <= 0) {
     throw new RangeError(`${label} must be positive`);
@@ -163,37 +146,19 @@ const finiteLimit = (
   return result;
 };
 
-const normalizeLimits = (
-  options: CreateAltairBrowserWorkspaceOptions,
-): WorkspaceLimits => {
+const normalizeLimits = (options: CreateAltairBrowserWorkspaceOptions): WorkspaceLimits => {
   const ignoredDirectoryNames = new Set(
-    (options.ignoredDirectoryNames ?? DEFAULT_IGNORED_DIRECTORY_NAMES).map(
-      (name) => {
-        if (typeof name !== "string" || !name.trim() || name.includes("/")) {
-          throw new TypeError(
-            "Workspace ignored directory names must be non-empty path segments",
-          );
-        }
-        return name.trim().toLocaleLowerCase();
-      },
-    ),
+    (options.ignoredDirectoryNames ?? DEFAULT_IGNORED_DIRECTORY_NAMES).map((name) => {
+      if (typeof name !== "string" || !name.trim() || name.includes("/")) {
+        throw new TypeError("Workspace ignored directory names must be non-empty path segments");
+      }
+      return name.trim().toLocaleLowerCase();
+    }),
   );
   return {
-    maxDepth: positiveInteger(
-      options.maxDepth,
-      DEFAULT_MAX_DEPTH,
-      "Workspace maxDepth",
-    ),
-    maxFiles: positiveInteger(
-      options.maxFiles,
-      DEFAULT_MAX_FILES,
-      "Workspace maxFiles",
-    ),
-    maxTotalBytes: finiteLimit(
-      options.maxTotalBytes,
-      DEFAULT_MAX_TOTAL_BYTES,
-      "Workspace maxTotalBytes",
-    ),
+    maxDepth: positiveInteger(options.maxDepth, DEFAULT_MAX_DEPTH, "Workspace maxDepth"),
+    maxFiles: positiveInteger(options.maxFiles, DEFAULT_MAX_FILES, "Workspace maxFiles"),
+    maxTotalBytes: finiteLimit(options.maxTotalBytes, DEFAULT_MAX_TOTAL_BYTES, "Workspace maxTotalBytes"),
     includeHidden: options.includeHidden === true,
     ignoredDirectoryNames,
   };
@@ -207,11 +172,7 @@ export const normalizeBrowserWorkspacePath = (input: string): string => {
     throw new TypeError("Workspace path contains a NUL byte");
   }
   const source = input.replaceAll("\\", "/").trim();
-  if (
-    source.startsWith("/") ||
-    source.startsWith("//") ||
-    /^[a-z]:/iu.test(source)
-  ) {
+  if (source.startsWith("/") || source.startsWith("//") || /^[a-z]:/iu.test(source)) {
     throw new TypeError(`Workspace path must be relative: ${input}`);
   }
   const segments: string[] = [];
@@ -245,14 +206,11 @@ const fileLike = (value: unknown): value is File => {
 };
 
 const filePath = (file: File, commonRoot?: string): string => {
-  const relative = (file as File & { readonly webkitRelativePath?: string })
-    .webkitRelativePath;
+  const relative = (file as File & { readonly webkitRelativePath?: string }).webkitRelativePath;
   const normalized = normalizeBrowserWorkspacePath(
     typeof relative === "string" && relative.trim() ? relative : file.name,
   );
-  return commonRoot && normalized.startsWith(`${commonRoot}/`)
-    ? normalized.slice(commonRoot.length + 1)
-    : normalized;
+  return commonRoot && normalized.startsWith(`${commonRoot}/`) ? normalized.slice(commonRoot.length + 1) : normalized;
 };
 
 const fileInfo = (path: string, file: File): AltairBrowserWorkspaceFile =>
@@ -264,8 +222,7 @@ const fileInfo = (path: string, file: File): AltairBrowserWorkspaceFile =>
     lastModified: file.lastModified,
   });
 
-const fingerprint = (file: AltairBrowserWorkspaceFile): string =>
-  `${file.size}:${file.lastModified}:${file.type}`;
+const fingerprint = (file: AltairBrowserWorkspaceFile): string => `${file.size}:${file.lastModified}:${file.type}`;
 
 const snapshot = (
   id: string,
@@ -282,14 +239,11 @@ const snapshot = (
     files: Object.freeze(
       [...entries.values()]
         .map(({ info }) => info)
-        .sort((left, right) =>
-          left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
-        ),
+        .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)),
     ),
   });
 
-const emptySnapshot = (revision = 0): AltairBrowserWorkspaceSnapshot =>
-  snapshot("", "", "empty", revision, new Map());
+const emptySnapshot = (revision = 0): AltairBrowserWorkspaceSnapshot => snapshot("", "", "empty", revision, new Map());
 
 const toFiles = (values: Iterable<File> | ArrayLike<File>): readonly File[] => {
   if (!values || typeof values !== "object") {
@@ -306,25 +260,18 @@ const toFiles = (values: Iterable<File> | ArrayLike<File>): readonly File[] => {
   return files;
 };
 
-const checkLimit = (
-  state: CollectState,
-  file: File,
-  limits: WorkspaceLimits,
-): void => {
+const checkLimit = (state: CollectState, file: File, limits: WorkspaceLimits): void => {
   state.count += 1;
   state.totalBytes += file.size;
   if (state.count > limits.maxFiles) {
-    throw new RangeError(
-      `Workspace contains more than ${limits.maxFiles} files`,
-    );
+    throw new RangeError(`Workspace contains more than ${limits.maxFiles} files`);
   }
   if (state.totalBytes > limits.maxTotalBytes) {
     throw new RangeError(`Workspace exceeds ${limits.maxTotalBytes} bytes`);
   }
 };
 
-const hiddenPath = (path: string): boolean =>
-  path.split("/").some((segment) => segment.startsWith("."));
+const hiddenPath = (path: string): boolean => path.split("/").some((segment) => segment.startsWith("."));
 
 const addEntry = (
   target: Map<string, WorkspaceEntry>,
@@ -346,10 +293,7 @@ const addEntry = (
   });
 };
 
-const collectFiles = (
-  files: readonly File[],
-  limits: WorkspaceLimits,
-): Map<string, WorkspaceEntry> => {
+const collectFiles = (files: readonly File[], limits: WorkspaceLimits): Map<string, WorkspaceEntry> => {
   const result = new Map<string, WorkspaceEntry>();
   const state: CollectState = { count: 0, totalBytes: 0 };
   const commonRoot = fileInputRoot(files);
@@ -361,12 +305,7 @@ const collectFiles = (
 
 const directoryChildren = async function* (
   directory: BrowserWorkspaceDirectoryHandle,
-): AsyncGenerator<
-  readonly [
-    string,
-    BrowserWorkspaceFileHandle | BrowserWorkspaceDirectoryHandle,
-  ]
-> {
+): AsyncGenerator<readonly [string, BrowserWorkspaceFileHandle | BrowserWorkspaceDirectoryHandle]> {
   if (typeof directory.entries === "function") {
     for await (const entry of directory.entries()) yield entry;
     return;
@@ -382,8 +321,7 @@ const directoryChildren = async function* (
 
 const fileHandle = (
   handle: BrowserWorkspaceFileHandle | BrowserWorkspaceDirectoryHandle,
-): handle is BrowserWorkspaceFileHandle =>
-  typeof (handle as BrowserWorkspaceFileHandle).getFile === "function";
+): handle is BrowserWorkspaceFileHandle => typeof (handle as BrowserWorkspaceFileHandle).getFile === "function";
 
 const collectDirectory = async (
   root: BrowserWorkspaceDirectoryHandle,
@@ -392,31 +330,20 @@ const collectDirectory = async (
 ): Promise<Map<string, WorkspaceEntry>> => {
   const result = new Map<string, WorkspaceEntry>();
   const state: CollectState = { count: 0, totalBytes: 0 };
-  const visit = async (
-    directory: BrowserWorkspaceDirectoryHandle,
-    prefix: string,
-    depth: number,
-  ): Promise<void> => {
+  const visit = async (directory: BrowserWorkspaceDirectoryHandle, prefix: string, depth: number): Promise<void> => {
     throwIfAborted(signal);
     if (depth > limits.maxDepth) {
-      throw new RangeError(
-        `Workspace directory depth exceeds ${limits.maxDepth}`,
-      );
+      throw new RangeError(`Workspace directory depth exceeds ${limits.maxDepth}`);
     }
     for await (const [rawName, handle] of directoryChildren(directory)) {
       throwIfAborted(signal);
-      const name =
-        typeof rawName === "string" && rawName.trim() ? rawName : handle.name;
-      const path = normalizeBrowserWorkspacePath(
-        prefix ? `${prefix}/${name}` : name,
-      );
+      const name = typeof rawName === "string" && rawName.trim() ? rawName : handle.name;
+      const path = normalizeBrowserWorkspacePath(prefix ? `${prefix}/${name}` : name);
       if (!limits.includeHidden && hiddenPath(path)) continue;
       if (fileHandle(handle)) {
         const file = await settleWithAbort(handle.getFile(), signal);
         if (!fileLike(file)) {
-          throw new TypeError(
-            `Workspace handle returned an invalid File: ${path}`,
-          );
+          throw new TypeError(`Workspace handle returned an invalid File: ${path}`);
         }
         addEntry(result, path, file, limits, state, handle);
       } else {
@@ -447,10 +374,7 @@ const ensureReadPermission = async (
       ? await settleWithAbort(handle.requestPermission(descriptor), signal)
       : current;
   if (requested !== "granted") {
-    throw new DOMException(
-      "Workspace read permission was denied",
-      "NotAllowedError",
-    );
+    throw new DOMException("Workspace read permission was denied", "NotAllowedError");
   }
 };
 
@@ -485,10 +409,7 @@ const ensureWritePermission = async (
     ? await settleWithAbort(handle.requestPermission(descriptor), signal)
     : current;
   if (requested !== "granted") {
-    throw new DOMException(
-      "Workspace write permission was denied",
-      "NotAllowedError",
-    );
+    throw new DOMException("Workspace write permission was denied", "NotAllowedError");
   }
 };
 
@@ -502,10 +423,7 @@ const writeDataBytes = (data: AltairBrowserWorkspaceWriteData): number => {
   throw new TypeError("Workspace write data must be text, a Blob, or a buffer");
 };
 
-const mapsEqual = (
-  left: ReadonlyMap<string, WorkspaceEntry>,
-  right: ReadonlyMap<string, WorkspaceEntry>,
-): boolean => {
+const mapsEqual = (left: ReadonlyMap<string, WorkspaceEntry>, right: ReadonlyMap<string, WorkspaceEntry>): boolean => {
   if (left.size !== right.size) return false;
   for (const [path, entry] of left) {
     const other = right.get(path);
@@ -519,8 +437,7 @@ const mapsEqual = (
 export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   private readonly environment: BrowserWorkspaceEnvironment;
   private readonly limits: WorkspaceLimits;
-  private readonly persistence:
-    BrowserWorkspaceDirectoryPersistence | undefined;
+  private readonly persistence: BrowserWorkspaceDirectoryPersistence | undefined;
   private readonly controller = new AbortController();
   private readonly listeners = new Set<AltairBrowserWorkspaceListener>();
   private readonly watchers = new Set<() => void>();
@@ -532,8 +449,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   private disposed = false;
 
   constructor(options: CreateAltairBrowserWorkspaceOptions = {}) {
-    this.environment =
-      options.environment ?? createBrowserWorkspaceEnvironment();
+    this.environment = options.environment ?? createBrowserWorkspaceEnvironment();
     this.limits = normalizeLimits(options);
     this.persistence = options.persistence;
   }
@@ -544,17 +460,15 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
 
   get capabilities(): AltairBrowserWorkspaceCapabilities {
     return Object.freeze({
-      directoryPicker:
-        typeof this.environment.showDirectoryPicker === "function",
+      directoryPicker: typeof this.environment.showDirectoryPicker === "function",
       openFilePicker: typeof this.environment.showOpenFilePicker === "function",
       fileInput: typeof this.environment.pickWithInput === "function",
       objectUrls:
         typeof this.environment.createObjectURL === "function" &&
         typeof this.environment.revokeObjectURL === "function",
       writable:
-        [...this.entries.values()].some(
-          ({ handle }) => typeof handle?.createWritable === "function",
-        ) || typeof this.root?.getFileHandle === "function",
+        [...this.entries.values()].some(({ handle }) => typeof handle?.createWritable === "function") ||
+        typeof this.root?.getFileHandle === "function",
     });
   }
 
@@ -562,9 +476,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     return this.root;
   }
 
-  async persistedDirectory(): Promise<
-    PersistedBrowserWorkspaceDirectory | undefined
-  > {
+  async persistedDirectory(): Promise<PersistedBrowserWorkspaceDirectory | undefined> {
     this.assertActive();
     return this.persistence?.load();
   }
@@ -575,16 +487,10 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   ): Promise<PersistedBrowserWorkspaceDirectory> {
     this.assertActive();
     if (!this.persistence) {
-      throw new DOMException(
-        "Workspace directory persistence is unavailable",
-        "NotSupportedError",
-      );
+      throw new DOMException("Workspace directory persistence is unavailable", "NotSupportedError");
     }
     if (!directory) {
-      throw new DOMException(
-        "There is no directory handle to remember",
-        "InvalidStateError",
-      );
+      throw new DOMException("There is no directory handle to remember", "InvalidStateError");
     }
     const persisted = Object.freeze({
       handle: directory,
@@ -600,44 +506,24 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     await this.persistence?.clear();
   }
 
-  async pickDirectory(
-    options: AltairBrowserWorkspacePickOptions = {},
-  ): Promise<AltairBrowserWorkspaceSnapshot> {
+  async pickDirectory(options: AltairBrowserWorkspacePickOptions = {}): Promise<AltairBrowserWorkspaceSnapshot> {
     this.assertActive();
     const generation = ++this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       throwIfAborted(linked.signal);
       if (this.environment.showDirectoryPicker) {
-        const root = await settleWithAbort(
-          this.environment.showDirectoryPicker(options.pickerOptions),
-          linked.signal,
-        );
+        const root = await settleWithAbort(this.environment.showDirectoryPicker(options.pickerOptions), linked.signal);
         await ensureReadPermission(root, linked.signal);
-        const entries = await collectDirectory(
-          root,
-          this.limits,
-          linked.signal,
-        );
+        const entries = await collectDirectory(root, this.limits, linked.signal);
         this.assertGeneration(generation, linked.signal);
-        return this.replace(
-          options.name?.trim() || root.name,
-          "directory-handle",
-          entries,
-          root,
-        );
+        return this.replace(options.name?.trim() || root.name, "directory-handle", entries, root);
       }
       if (!this.environment.pickWithInput) {
-        throw new DOMException(
-          "Directory selection is unavailable",
-          "NotSupportedError",
-        );
+        throw new DOMException("Directory selection is unavailable", "NotSupportedError");
       }
       const files = await settleWithAbort(
-        this.environment.pickWithInput(
-          { directory: true, multiple: true },
-          linked.signal,
-        ),
+        this.environment.pickWithInput({ directory: true, multiple: true }, linked.signal),
         linked.signal,
       );
       if (!files.length) {
@@ -645,11 +531,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       }
       const entries = collectFiles(files, this.limits);
       this.assertGeneration(generation, linked.signal);
-      return this.replace(
-        options.name?.trim() || directoryName(files) || "Workspace",
-        "file-input",
-        entries,
-      );
+      return this.replace(options.name?.trim() || directoryName(files) || "Workspace", "file-input", entries);
     } finally {
       linked.dispose();
     }
@@ -671,23 +553,10 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const generation = ++this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
-      await ensureReadPermission(
-        handle,
-        linked.signal,
-        options.requestPermission === true,
-      );
-      const entries = await collectDirectory(
-        handle,
-        this.limits,
-        linked.signal,
-      );
+      await ensureReadPermission(handle, linked.signal, options.requestPermission === true);
+      const entries = await collectDirectory(handle, this.limits, linked.signal);
       this.assertGeneration(generation, linked.signal);
-      return this.replace(
-        options.name?.trim() || handle.name,
-        "directory-handle",
-        entries,
-        handle,
-      );
+      return this.replace(options.name?.trim() || handle.name, "directory-handle", entries, handle);
     } finally {
       linked.dispose();
     }
@@ -706,20 +575,13 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     }
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
-      return await workspacePermission(
-        root,
-        mode,
-        options.request === true,
-        linked.signal,
-      );
+      return await workspacePermission(root, mode, options.request === true, linked.signal);
     } finally {
       linked.dispose();
     }
   }
 
-  async pickFiles(
-    options: AltairBrowserWorkspacePickOptions = {},
-  ): Promise<AltairBrowserWorkspaceSnapshot> {
+  async pickFiles(options: AltairBrowserWorkspacePickOptions = {}): Promise<AltairBrowserWorkspaceSnapshot> {
     this.assertActive();
     const generation = ++this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
@@ -739,31 +601,15 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
           throwIfAborted(linked.signal);
           const file = await settleWithAbort(handle.getFile(), linked.signal);
           if (!fileLike(file)) {
-            throw new TypeError(
-              `Workspace handle returned an invalid File: ${handle.name}`,
-            );
+            throw new TypeError(`Workspace handle returned an invalid File: ${handle.name}`);
           }
-          addEntry(
-            entries,
-            normalizeBrowserWorkspacePath(handle.name || file.name),
-            file,
-            this.limits,
-            state,
-            handle,
-          );
+          addEntry(entries, normalizeBrowserWorkspacePath(handle.name || file.name), file, this.limits, state, handle);
         }
         this.assertGeneration(generation, linked.signal);
-        return this.replace(
-          options.name?.trim() || "Files",
-          "file-handles",
-          entries,
-        );
+        return this.replace(options.name?.trim() || "Files", "file-handles", entries);
       }
       if (!this.environment.pickWithInput) {
-        throw new DOMException(
-          "File selection is unavailable",
-          "NotSupportedError",
-        );
+        throw new DOMException("File selection is unavailable", "NotSupportedError");
       }
       const files = await settleWithAbort(
         this.environment.pickWithInput({ multiple: true }, linked.signal),
@@ -774,11 +620,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       }
       const entries = collectFiles(files, this.limits);
       this.assertGeneration(generation, linked.signal);
-      return this.replace(
-        options.name?.trim() || "Files",
-        "file-input",
-        entries,
-      );
+      return this.replace(options.name?.trim() || "Files", "file-input", entries);
     } finally {
       linked.dispose();
     }
@@ -799,19 +641,13 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       }
       const entries = collectFiles(values, this.limits);
       this.assertGeneration(generation, linked.signal);
-      return this.replace(
-        options.name?.trim() || directoryName(values) || "Files",
-        "file-input",
-        entries,
-      );
+      return this.replace(options.name?.trim() || directoryName(values) || "Files", "file-input", entries);
     } finally {
       linked.dispose();
     }
   }
 
-  async refresh(
-    options: AltairBrowserWorkspaceReadOptions = {},
-  ): Promise<AltairBrowserWorkspaceSnapshot> {
+  async refresh(options: AltairBrowserWorkspaceReadOptions = {}): Promise<AltairBrowserWorkspaceSnapshot> {
     this.assertActive();
     const root = this.root;
     const workspaceId = this.state.id;
@@ -829,13 +665,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       if (mapsEqual(this.entries, entries)) return this.state;
       this.revokeChangedUrls(entries);
       this.entries = entries;
-      this.state = snapshot(
-        this.state.id,
-        this.state.name,
-        this.state.source,
-        this.state.revision + 1,
-        entries,
-      );
+      this.state = snapshot(this.state.id, this.state.name, this.state.source, this.state.revision + 1, entries);
       this.emit({ type: "refresh", snapshot: this.state });
       return this.state;
     } finally {
@@ -854,27 +684,19 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const exact = this.entries.get(normalized);
     if (exact) return exact.info;
     if (normalized.includes("/")) return undefined;
-    const candidates = [...this.entries.values()].filter(
-      ({ info }) => info.name === normalized,
-    );
+    const candidates = [...this.entries.values()].filter(({ info }) => info.name === normalized);
     return candidates.length === 1 ? candidates[0]!.info : undefined;
   }
 
-  async file(
-    reference: string,
-    options: AltairBrowserWorkspaceReadOptions = {},
-  ): Promise<File> {
+  async file(reference: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<File> {
     this.assertActive();
     const info = this.match(reference);
-    if (!info)
-      throw new RangeError(`Workspace file does not exist: ${reference}`);
+    if (!info) throw new RangeError(`Workspace file does not exist: ${reference}`);
     const entry = this.entries.get(info.path)!;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       throwIfAborted(linked.signal);
-      const file = entry.handle
-        ? await settleWithAbort(entry.handle.getFile(), linked.signal)
-        : entry.file;
+      const file = entry.handle ? await settleWithAbort(entry.handle.getFile(), linked.signal) : entry.file;
       if (!fileLike(file)) {
         throw new TypeError(`Workspace file is invalid: ${info.path}`);
       }
@@ -884,10 +706,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     }
   }
 
-  async read(
-    reference: string,
-    options: AltairBrowserWorkspaceReadOptions = {},
-  ): Promise<Uint8Array> {
+  async read(reference: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<Uint8Array> {
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       const file = await this.file(reference, { signal: linked.signal });
@@ -913,25 +732,16 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       throw new RangeError(`Workspace file does not exist: ${path}`);
     }
     const bytes = writeDataBytes(data);
-    const currentBytes = [...this.entries.values()].reduce(
-      (total, entry) => total + entry.info.size,
-      0,
-    );
+    const currentBytes = [...this.entries.values()].reduce((total, entry) => total + entry.info.size, 0);
     const projectedBytes = currentBytes - (existing?.info.size ?? 0) + bytes;
     if (projectedBytes > this.limits.maxTotalBytes) {
-      throw new RangeError(
-        `Workspace contents exceed ${this.limits.maxTotalBytes} bytes`,
-      );
+      throw new RangeError(`Workspace contents exceed ${this.limits.maxTotalBytes} bytes`);
     }
     const generation = this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     let writable: BrowserWorkspaceWritable | undefined;
     try {
-      const handle = await this.resolveWritableHandle(
-        path,
-        options.create === true,
-        linked.signal,
-      );
+      const handle = await this.resolveWritableHandle(path, options.create === true, linked.signal);
       writable = await settleWithAbort(handle.createWritable!(), linked.signal);
       await settleWithAbort(writable.write(data), linked.signal);
       await settleWithAbort(writable.close(), linked.signal);
@@ -949,13 +759,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       });
       this.revokeChangedUrls(next);
       this.entries = next;
-      this.state = snapshot(
-        this.state.id,
-        this.state.name,
-        this.state.source,
-        this.state.revision + 1,
-        next,
-      );
+      this.state = snapshot(this.state.id, this.state.name, this.state.source, this.state.revision + 1, next);
       this.emit({ type: "refresh", snapshot: this.state });
       return this.entries.get(path)!.info;
     } catch (error) {
@@ -966,19 +770,10 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     }
   }
 
-  async url(
-    reference: string,
-    options: AltairBrowserWorkspaceReadOptions = {},
-  ): Promise<string> {
+  async url(reference: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<string> {
     this.assertActive();
-    if (
-      !this.environment.createObjectURL ||
-      !this.environment.revokeObjectURL
-    ) {
-      throw new DOMException(
-        "Object URLs are unavailable",
-        "NotSupportedError",
-      );
+    if (!this.environment.createObjectURL || !this.environment.revokeObjectURL) {
+      throw new DOMException("Object URLs are unavailable", "NotSupportedError");
     }
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
@@ -991,10 +786,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       const file = await this.file(info.path, { signal: linked.signal });
       throwIfAborted(linked.signal);
       if (this.entries.get(info.path) !== entry) {
-        throw new DOMException(
-          "Workspace file changed while its URL was being created",
-          "AbortError",
-        );
+        throw new DOMException("Workspace file changed while its URL was being created", "AbortError");
       }
       const currentFingerprint = `${file.size}:${file.lastModified}:${file.type}`;
       const cached = this.urls.get(info.path);
@@ -1025,9 +817,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     };
   }
 
-  watch(
-    options: AltairBrowserWorkspaceWatchOptions = {},
-  ): AltairBrowserWorkspaceDisposable {
+  watch(options: AltairBrowserWorkspaceWatchOptions = {}): AltairBrowserWorkspaceDisposable {
     this.assertActive();
     if (options.signal?.aborted) throw abortReason(options.signal);
     if (!this.root || this.state.source !== "directory-handle") {
@@ -1035,16 +825,10 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     }
     const intervalMs = options.intervalMs ?? 1_000;
     if (!Number.isFinite(intervalMs) || intervalMs < MIN_WATCH_INTERVAL_MS) {
-      throw new RangeError(
-        `Workspace watch interval must be at least ${MIN_WATCH_INTERVAL_MS}ms`,
-      );
+      throw new RangeError(`Workspace watch interval must be at least ${MIN_WATCH_INTERVAL_MS}ms`);
     }
     const controller = new AbortController();
-    const linked = linkAbortSignals([
-      this.controller.signal,
-      options.signal,
-      controller.signal,
-    ]);
+    const linked = linkAbortSignals([this.controller.signal, options.signal, controller.signal]);
     let running = false;
     let active = true;
     const tick = () => {
@@ -1074,9 +858,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const dispose = () => {
       if (!active) return;
       active = false;
-      controller.abort(
-        new DOMException("Workspace watcher disposed", "AbortError"),
-      );
+      controller.abort(new DOMException("Workspace watcher disposed", "AbortError"));
       linked.dispose();
       options.signal?.removeEventListener("abort", dispose);
       this.environment.clearInterval(token);
@@ -1106,9 +888,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     if (this.disposed) return;
     this.disposed = true;
     this.generation += 1;
-    this.controller.abort(
-      new DOMException("Browser workspace disposed", "AbortError"),
-    );
+    this.controller.abort(new DOMException("Browser workspace disposed", "AbortError"));
     for (const dispose of [...this.watchers]) dispose();
     this.revokeAllUrls();
     void this.persistence?.dispose?.();
@@ -1129,13 +909,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     for (const dispose of [...this.watchers]) dispose();
     this.entries = entries;
     this.root = root;
-    this.state = snapshot(
-      this.workspaceId(),
-      name || "Workspace",
-      source,
-      1,
-      entries,
-    );
+    this.state = snapshot(this.workspaceId(), name || "Workspace", source, 1, entries);
     this.emit({ type: "replace", snapshot: this.state });
     return this.state;
   }
@@ -1193,52 +967,29 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     if (existing) {
       await ensureWritePermission(existing, signal);
       if (typeof existing.createWritable !== "function") {
-        throw new DOMException(
-          `Workspace file is read only: ${path}`,
-          "NotSupportedError",
-        );
+        throw new DOMException(`Workspace file is read only: ${path}`, "NotSupportedError");
       }
       return existing;
     }
     const root = this.root;
     if (!root || typeof root.getFileHandle !== "function") {
-      throw new DOMException(
-        "The active workspace cannot create files",
-        "NotSupportedError",
-      );
+      throw new DOMException("The active workspace cannot create files", "NotSupportedError");
     }
     await ensureWritePermission(root, signal);
     const parts = path.split("/");
     if (parts.length - 1 > this.limits.maxDepth) {
-      throw new RangeError(
-        `Workspace directory depth exceeds ${this.limits.maxDepth}`,
-      );
+      throw new RangeError(`Workspace directory depth exceeds ${this.limits.maxDepth}`);
     }
     let directory = root;
-    if (
-      parts.length > 1 &&
-      typeof directory.getDirectoryHandle !== "function"
-    ) {
-      throw new DOMException(
-        "The active workspace cannot create nested files",
-        "NotSupportedError",
-      );
+    if (parts.length > 1 && typeof directory.getDirectoryHandle !== "function") {
+      throw new DOMException("The active workspace cannot create nested files", "NotSupportedError");
     }
     for (const segment of parts.slice(0, -1)) {
-      directory = await settleWithAbort(
-        directory.getDirectoryHandle!(segment, { create }),
-        signal,
-      );
+      directory = await settleWithAbort(directory.getDirectoryHandle!(segment, { create }), signal);
     }
-    const handle = await settleWithAbort(
-      directory.getFileHandle!(parts.at(-1)!, { create }),
-      signal,
-    );
+    const handle = await settleWithAbort(directory.getFileHandle!(parts.at(-1)!, { create }), signal);
     if (typeof handle.createWritable !== "function") {
-      throw new DOMException(
-        `Workspace file is read only: ${path}`,
-        "NotSupportedError",
-      );
+      throw new DOMException(`Workspace file is read only: ${path}`, "NotSupportedError");
     }
     return handle;
   }
@@ -1246,10 +997,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   private assertGeneration(generation: number, signal: AbortSignal): void {
     throwIfAborted(signal);
     if (generation !== this.generation) {
-      throw new DOMException(
-        "Browser workspace selection was superseded",
-        "AbortError",
-      );
+      throw new DOMException("Browser workspace selection was superseded", "AbortError");
     }
   }
 
@@ -1269,8 +1017,7 @@ const directoryName = (files: readonly File[]): string | undefined => {
 const fileInputRoot = (files: readonly File[]): string | undefined => {
   let commonRoot: string | undefined;
   for (const file of files) {
-    const relative = (file as File & { readonly webkitRelativePath?: string })
-      .webkitRelativePath;
+    const relative = (file as File & { readonly webkitRelativePath?: string }).webkitRelativePath;
     if (!relative?.trim()) return undefined;
     const segments = relative.replaceAll("\\", "/").split("/");
     const candidate = segments[0]?.trim();

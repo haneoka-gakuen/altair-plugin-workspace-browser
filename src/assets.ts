@@ -1,8 +1,5 @@
 import type { JsonObject } from "@haneoka/altair/model";
-import type {
-  AltairAssetProviderContribution,
-  AltairResolvedAsset,
-} from "@haneoka/altair/plugins";
+import type { AltairAssetProviderContribution, AltairResolvedAsset } from "@haneoka/altair/plugins";
 import type { AltairBrowserWorkspaceService } from "./contracts.js";
 
 const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
@@ -28,17 +25,11 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
 const mediaType = (path: string, declared: string): string | undefined => {
   if (declared.trim()) return declared.trim();
   const normalized = path.toLowerCase();
-  const extension = Object.keys(MEDIA_TYPES).find((candidate) =>
-    normalized.endsWith(candidate),
-  );
+  const extension = Object.keys(MEDIA_TYPES).find((candidate) => normalized.endsWith(candidate));
   return extension ? MEDIA_TYPES[extension] : undefined;
 };
 
-const metadata = (
-  path: string,
-  size: number,
-  lastModified: number,
-): JsonObject => ({
+const metadata = (path: string, size: number, lastModified: number): JsonObject => ({
   workspacePath: path,
   size,
   lastModified,
@@ -51,9 +42,7 @@ export const createBrowserWorkspaceAssetContribution = (
     id: "browser-workspace-assets",
     name: "Browser workspace assets",
     supports: ({ reference }) => (workspace.match(reference) ? 1 : 0),
-    async resolve({ reference, signal }): Promise<
-      AltairResolvedAsset | undefined
-    > {
+    async resolve({ reference, signal }): Promise<AltairResolvedAsset | undefined> {
       const file = workspace.match(reference);
       if (!file) return undefined;
       const type = mediaType(file.path, file.type);

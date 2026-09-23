@@ -19,8 +19,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: (id) =>
-        id === "@haneoka/altair" || id.startsWith("@haneoka/altair/"),
+      external: (id) => id === "@haneoka/altair" || id.startsWith("@haneoka/altair/"),
     },
     sourcemap: true,
     target: "es2022",

@@ -26,11 +26,9 @@ const requestResult = <Value>(request: IDBRequest<Value>): Promise<Value> =>
     request.addEventListener("success", () => resolve(request.result), {
       once: true,
     });
-    request.addEventListener(
-      "error",
-      () => reject(request.error ?? new Error("IndexedDB request failed")),
-      { once: true },
-    );
+    request.addEventListener("error", () => reject(request.error ?? new Error("IndexedDB request failed")), {
+      once: true,
+    });
   });
 
 const transactionCompletion = (transaction: IDBTransaction): Promise<void> =>
@@ -38,23 +36,17 @@ const transactionCompletion = (transaction: IDBTransaction): Promise<void> =>
     transaction.addEventListener("complete", () => resolve(), { once: true });
     transaction.addEventListener(
       "abort",
-      () =>
-        reject(
-          transaction.error ?? new Error("IndexedDB transaction was aborted"),
-        ),
+      () => reject(transaction.error ?? new Error("IndexedDB transaction was aborted")),
       { once: true },
     );
     transaction.addEventListener(
       "error",
-      () =>
-        reject(transaction.error ?? new Error("IndexedDB transaction failed")),
+      () => reject(transaction.error ?? new Error("IndexedDB transaction failed")),
       { once: true },
     );
   });
 
-const persistedDirectory = (
-  value: unknown,
-): PersistedBrowserWorkspaceDirectory | undefined => {
+const persistedDirectory = (value: unknown): PersistedBrowserWorkspaceDirectory | undefined => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
@@ -88,27 +80,19 @@ export class IndexedDbBrowserWorkspaceDirectoryPersistence implements BrowserWor
   private databasePromise: Promise<IDBDatabase> | undefined;
   private disposed = false;
 
-  constructor(
-    options: IndexedDbBrowserWorkspaceDirectoryPersistenceOptions = {},
-  ) {
+  constructor(options: IndexedDbBrowserWorkspaceDirectoryPersistenceOptions = {}) {
     this.indexedDb = options.indexedDb ?? globalThis.indexedDB;
-    this.databaseName =
-      options.databaseName?.trim() || "altair-browser-workspace-v1";
+    this.databaseName = options.databaseName?.trim() || "altair-browser-workspace-v1";
     this.databaseVersion = options.databaseVersion ?? 1;
     this.storeName = options.storeName?.trim() || "workspace";
     this.key = options.key ?? "active-directory";
-    if (
-      !Number.isSafeInteger(this.databaseVersion) ||
-      this.databaseVersion <= 0
-    ) {
+    if (!Number.isSafeInteger(this.databaseVersion) || this.databaseVersion <= 0) {
       throw new RangeError("IndexedDB databaseVersion must be positive");
     }
   }
 
   async load(): Promise<PersistedBrowserWorkspaceDirectory | undefined> {
-    const value = await this.withStore("readonly", (store) =>
-      store.get(this.key),
-    );
+    const value = await this.withStore("readonly", (store) => store.get(this.key));
     return persistedDirectory(value);
   }
 
@@ -137,33 +121,21 @@ export class IndexedDbBrowserWorkspaceDirectoryPersistence implements BrowserWor
   ): Promise<Value> {
     const database = await this.database();
     const transaction = database.transaction(this.storeName, mode);
-    const result = await requestResult(
-      action(transaction.objectStore(this.storeName)),
-    );
+    const result = await requestResult(action(transaction.objectStore(this.storeName)));
     await transactionCompletion(transaction);
     return result;
   }
 
   private database(): Promise<IDBDatabase> {
     if (this.disposed) {
-      return Promise.reject(
-        new DOMException(
-          "Browser workspace persistence is disposed",
-          "InvalidStateError",
-        ),
-      );
+      return Promise.reject(new DOMException("Browser workspace persistence is disposed", "InvalidStateError"));
     }
     if (!this.indexedDb) {
-      return Promise.reject(
-        new DOMException("IndexedDB is unavailable", "NotSupportedError"),
-      );
+      return Promise.reject(new DOMException("IndexedDB is unavailable", "NotSupportedError"));
     }
     if (this.databasePromise) return this.databasePromise;
     this.databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = this.indexedDb!.open(
-        this.databaseName,
-        this.databaseVersion,
-      );
+      const request = this.indexedDb!.open(this.databaseName, this.databaseVersion);
       request.addEventListener(
         "upgradeneeded",
         () => {
@@ -177,21 +149,12 @@ export class IndexedDbBrowserWorkspaceDirectoryPersistence implements BrowserWor
       request.addEventListener("success", () => resolve(request.result), {
         once: true,
       });
-      request.addEventListener(
-        "error",
-        () =>
-          reject(request.error ?? new Error("IndexedDB could not be opened")),
-        { once: true },
-      );
+      request.addEventListener("error", () => reject(request.error ?? new Error("IndexedDB could not be opened")), {
+        once: true,
+      });
       request.addEventListener(
         "blocked",
-        () =>
-          reject(
-            new DOMException(
-              "IndexedDB upgrade was blocked by another context",
-              "InvalidStateError",
-            ),
-          ),
+        () => reject(new DOMException("IndexedDB upgrade was blocked by another context", "InvalidStateError")),
         { once: true },
       );
     });
@@ -201,5 +164,4 @@ export class IndexedDbBrowserWorkspaceDirectoryPersistence implements BrowserWor
 
 export const createIndexedDbBrowserWorkspaceDirectoryPersistence = (
   options: IndexedDbBrowserWorkspaceDirectoryPersistenceOptions = {},
-): BrowserWorkspaceDirectoryPersistence =>
-  new IndexedDbBrowserWorkspaceDirectoryPersistence(options);
+): BrowserWorkspaceDirectoryPersistence => new IndexedDbBrowserWorkspaceDirectoryPersistence(options);
