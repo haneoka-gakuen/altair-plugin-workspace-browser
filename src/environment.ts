@@ -24,6 +24,7 @@ export interface BrowserWorkspaceDirectoryHandle {
   requestPermission?(descriptor?: Readonly<{ mode: "read" | "readwrite" }>): Promise<BrowserWorkspacePermissionState>;
   getFileHandle?(name: string, options?: Readonly<{ create?: boolean }>): Promise<BrowserWorkspaceFileHandle>;
   getDirectoryHandle?(name: string, options?: Readonly<{ create?: boolean }>): Promise<BrowserWorkspaceDirectoryHandle>;
+  removeEntry?(name: string, options?: Readonly<{ recursive?: boolean }>): Promise<void>;
 }
 
 export interface BrowserWorkspaceInputOptions {

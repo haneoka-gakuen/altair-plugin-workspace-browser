@@ -230,12 +230,14 @@ const snapshot = (
   source: AltairBrowserWorkspaceSource,
   revision: number,
   entries: ReadonlyMap<string, WorkspaceEntry>,
+  directories: readonly string[] = [],
 ): AltairBrowserWorkspaceSnapshot =>
   Object.freeze({
     id,
     name,
     source,
     revision,
+    directories: Object.freeze([...directories]),
     files: Object.freeze(
       [...entries.values()]
         .map(({ info }) => info)
@@ -327,13 +329,19 @@ const collectDirectory = async (
   root: BrowserWorkspaceDirectoryHandle,
   limits: WorkspaceLimits,
   signal: AbortSignal,
-): Promise<Map<string, WorkspaceEntry>> => {
+): Promise<{ entries: Map<string, WorkspaceEntry>; directories: readonly string[] }> => {
   const result = new Map<string, WorkspaceEntry>();
+  const directories: string[] = [];
   const state: CollectState = { count: 0, totalBytes: 0 };
   const visit = async (directory: BrowserWorkspaceDirectoryHandle, prefix: string, depth: number): Promise<void> => {
     throwIfAborted(signal);
     if (depth > limits.maxDepth) {
       throw new RangeError(`Workspace directory depth exceeds ${limits.maxDepth}`);
+    }
+    if (prefix) {
+      if (directories.length >= limits.maxFiles)
+        throw new RangeError(`Workspace contains more than ${limits.maxFiles} directories`);
+      directories.push(prefix);
     }
     for await (const [rawName, handle] of directoryChildren(directory)) {
       throwIfAborted(signal);
@@ -355,7 +363,7 @@ const collectDirectory = async (
     }
   };
   await visit(root, "", 0);
-  return result;
+  return { entries: result, directories: directories.sort() };
 };
 
 const ensureReadPermission = async (
@@ -443,6 +451,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   private readonly watchers = new Set<() => void>();
   private readonly urls = new Map<string, ObjectUrlEntry>();
   private entries = new Map<string, WorkspaceEntry>();
+  private directories: readonly string[] = [];
   private root: BrowserWorkspaceDirectoryHandle | undefined;
   private state = emptySnapshot();
   private generation = 0;
@@ -515,9 +524,15 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       if (this.environment.showDirectoryPicker) {
         const root = await settleWithAbort(this.environment.showDirectoryPicker(options.pickerOptions), linked.signal);
         await ensureReadPermission(root, linked.signal);
-        const entries = await collectDirectory(root, this.limits, linked.signal);
+        const collected = await collectDirectory(root, this.limits, linked.signal);
         this.assertGeneration(generation, linked.signal);
-        return this.replace(options.name?.trim() || root.name, "directory-handle", entries, root);
+        return this.replace(
+          options.name?.trim() || root.name,
+          "directory-handle",
+          collected.entries,
+          root,
+          collected.directories,
+        );
       }
       if (!this.environment.pickWithInput) {
         throw new DOMException("Directory selection is unavailable", "NotSupportedError");
@@ -554,9 +569,15 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       await ensureReadPermission(handle, linked.signal, options.requestPermission === true);
-      const entries = await collectDirectory(handle, this.limits, linked.signal);
+      const collected = await collectDirectory(handle, this.limits, linked.signal);
       this.assertGeneration(generation, linked.signal);
-      return this.replace(options.name?.trim() || handle.name, "directory-handle", entries, handle);
+      return this.replace(
+        options.name?.trim() || handle.name,
+        "directory-handle",
+        collected.entries,
+        handle,
+        collected.directories,
+      );
     } finally {
       linked.dispose();
     }
@@ -657,15 +678,24 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       await ensureReadPermission(root, linked.signal);
-      const entries = await collectDirectory(root, this.limits, linked.signal);
+      const { entries, directories } = await collectDirectory(root, this.limits, linked.signal);
       throwIfAborted(linked.signal);
       if (this.root !== root || this.state.id !== workspaceId) {
         return this.state;
       }
-      if (mapsEqual(this.entries, entries)) return this.state;
+      if (mapsEqual(this.entries, entries) && JSON.stringify(this.directories) === JSON.stringify(directories))
+        return this.state;
       this.revokeChangedUrls(entries);
       this.entries = entries;
-      this.state = snapshot(this.state.id, this.state.name, this.state.source, this.state.revision + 1, entries);
+      this.directories = directories;
+      this.state = snapshot(
+        this.state.id,
+        this.state.name,
+        this.state.source,
+        this.state.revision + 1,
+        entries,
+        directories,
+      );
       this.emit({ type: "refresh", snapshot: this.state });
       return this.state;
     } finally {
@@ -693,10 +723,12 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const info = this.match(reference);
     if (!info) throw new RangeError(`Workspace file does not exist: ${reference}`);
     const entry = this.entries.get(info.path)!;
+    const generation = this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       throwIfAborted(linked.signal);
       const file = entry.handle ? await settleWithAbort(entry.handle.getFile(), linked.signal) : entry.file;
+      this.assertGeneration(generation, linked.signal);
       if (!fileLike(file)) {
         throw new TypeError(`Workspace file is invalid: ${info.path}`);
       }
@@ -707,10 +739,12 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
   }
 
   async read(reference: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<Uint8Array> {
+    const generation = this.generation;
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     try {
       const file = await this.file(reference, { signal: linked.signal });
       const bytes = await settleWithAbort(file.arrayBuffer(), linked.signal);
+      this.assertGeneration(generation, linked.signal);
       return new Uint8Array(bytes);
     } finally {
       linked.dispose();
@@ -741,13 +775,19 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const linked = linkAbortSignals([this.controller.signal, options.signal]);
     let writable: BrowserWorkspaceWritable | undefined;
     try {
+      if (options.exclusive && await this.exists(path, { signal: linked.signal }))
+        throw new DOMException("Target already exists", "InvalidModificationError");
       const handle = await this.resolveWritableHandle(path, options.create === true, linked.signal);
+      this.assertGeneration(generation, linked.signal);
       writable = await settleWithAbort(handle.createWritable!(), linked.signal);
+      this.assertGeneration(generation, linked.signal);
       await settleWithAbort(writable.write(data), linked.signal);
+      this.assertGeneration(generation, linked.signal);
       await settleWithAbort(writable.close(), linked.signal);
       writable = undefined;
       this.assertGeneration(generation, linked.signal);
       const file = await settleWithAbort(handle.getFile(), linked.signal);
+      this.assertGeneration(generation, linked.signal);
       if (!fileLike(file)) {
         throw new TypeError(`Workspace file is invalid after writing: ${path}`);
       }
@@ -759,7 +799,14 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
       });
       this.revokeChangedUrls(next);
       this.entries = next;
-      this.state = snapshot(this.state.id, this.state.name, this.state.source, this.state.revision + 1, next);
+      this.state = snapshot(
+        this.state.id,
+        this.state.name,
+        this.state.source,
+        this.state.revision + 1,
+        next,
+        this.directories,
+      );
       this.emit({ type: "refresh", snapshot: this.state });
       return this.entries.get(path)!.info;
     } catch (error) {
@@ -768,6 +815,274 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     } finally {
       linked.dispose();
     }
+  }
+
+  async mkdir(path: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<void> {
+    this.assertActive();
+    path = normalizeBrowserWorkspacePath(path);
+    this.assertNativePathIncluded(path);
+    const generation = this.generation;
+    const linked = linkAbortSignals([this.controller.signal, options.signal]);
+    try {
+      await this.nativeDirectory(path, true, generation, linked.signal);
+      this.assertGeneration(generation, linked.signal);
+      await this.refresh({ signal: linked.signal });
+    } finally {
+      linked.dispose();
+    }
+  }
+
+  async exists(path: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<boolean> {
+    this.assertActive();
+    path = normalizeBrowserWorkspacePath(path);
+    this.assertNativePathIncluded(path);
+    const generation = this.generation;
+    const linked = linkAbortSignals([this.controller.signal, options.signal]);
+    try {
+      const parts = path.split("/");
+      const parent = await this.nativeDirectory(parts.slice(0, -1).join("/"), false, generation, linked.signal);
+      return await this.nativeEntryExists(parent, parts.at(-1)!, generation, linked.signal);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotFoundError") return false;
+      throw error;
+    } finally { linked.dispose(); }
+  }
+
+  async remove(
+    path: string,
+    options: AltairBrowserWorkspaceReadOptions & {
+      readonly recursive?: boolean;
+      readonly expected?: { readonly files: readonly AltairBrowserWorkspaceFile[]; readonly directories: readonly string[] };
+    } = {},
+  ): Promise<void> {
+    this.assertActive();
+    path = normalizeBrowserWorkspacePath(path);
+    this.assertNativePathIncluded(path);
+    const generation = this.generation;
+    const linked = linkAbortSignals([this.controller.signal, options.signal]);
+    try {
+      const parts = path.split("/");
+      const parent = await this.nativeDirectory(parts.slice(0, -1).join("/"), false, generation, linked.signal);
+      if (!parent.removeEntry) throw new DOMException("Directory removal is unavailable", "NotSupportedError");
+      if (options.expected) {
+        let actualFiles: AltairBrowserWorkspaceFile[], actualDirectories: string[];
+        try {
+          const handle = await parent.getFileHandle!(parts.at(-1)!);
+          actualFiles = [fileInfo(path, await handle.getFile())];
+          actualDirectories = [];
+        } catch (error) {
+          if (!(error instanceof DOMException) || error.name !== "TypeMismatchError") throw error;
+          const directory = await parent.getDirectoryHandle!(parts.at(-1)!);
+          const collected = await collectDirectory(directory, { ...this.limits, includeHidden: true, ignoredDirectoryNames: new Set() }, linked.signal);
+          actualFiles = [...collected.entries.values()].map((entry) => ({ ...entry.info, path: `${path}/${entry.info.path}` }));
+          actualDirectories = [path, ...collected.directories.map((child) => `${path}/${child}`)];
+        }
+        const signature = (files: readonly AltairBrowserWorkspaceFile[], directories: readonly string[]) => JSON.stringify([
+          files.map((file) => [file.path, file.size, file.lastModified]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+          [...directories].sort(),
+        ]);
+        if (signature(actualFiles, actualDirectories) !== signature(options.expected.files, options.expected.directories))
+          throw new DOMException("The source changed or contains files missing from the recovery copy", "InvalidStateError");
+      }
+      this.assertGeneration(generation, linked.signal);
+      await parent.removeEntry(parts.at(-1)!, { recursive: options.recursive === true });
+      this.assertGeneration(generation, linked.signal);
+      await this.refresh({ signal: linked.signal });
+    } finally {
+      linked.dispose();
+    }
+  }
+
+  /** Copy first, remove the original only after all files were written and checked. */
+  async rename(
+    source: string,
+    target: string,
+    options: AltairBrowserWorkspaceReadOptions = {},
+  ): Promise<AltairBrowserWorkspaceSnapshot> {
+    return this.copyOrMove(source, target, true, options);
+  }
+
+  async copy(source: string, target: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<AltairBrowserWorkspaceSnapshot> {
+    return this.copyOrMove(source, target, false, options);
+  }
+
+  private async copyOrMove(source: string, target: string, removeOriginal: boolean, options: AltairBrowserWorkspaceReadOptions): Promise<AltairBrowserWorkspaceSnapshot> {
+    this.assertActive();
+    source = normalizeBrowserWorkspacePath(source);
+    target = normalizeBrowserWorkspacePath(target);
+    this.assertNativePathIncluded(source);
+    this.assertNativePathIncluded(target);
+    if (source === target || target.startsWith(`${source}/`)) throw new TypeError("Move target is inside its source");
+    const generation = this.generation;
+    const linked = linkAbortSignals([this.controller.signal, options.signal]);
+    try {
+      const sourceParts = source.split("/"),
+        targetParts = target.split("/");
+      const sourceParent = await this.nativeDirectory(
+        sourceParts.slice(0, -1).join("/"),
+        false,
+        generation,
+        linked.signal,
+      );
+      const targetParent = await this.nativeDirectory(
+        targetParts.slice(0, -1).join("/"),
+        true,
+        generation,
+        linked.signal,
+      );
+      if (removeOriginal && !sourceParent.removeEntry) throw new DOMException("Directory removal is unavailable", "NotSupportedError");
+      if (await this.nativeEntryExists(targetParent, targetParts.at(-1)!, generation, linked.signal))
+        throw new DOMException("Move target already exists", "InvalidModificationError");
+      this.assertGeneration(generation, linked.signal);
+      let originalFile: BrowserWorkspaceFileHandle | undefined;
+      try {
+        originalFile = await sourceParent.getFileHandle!(sourceParts.at(-1)!);
+      } catch (error) {
+        if (!(error instanceof DOMException) || error.name !== "TypeMismatchError") throw error;
+      }
+      const copy = async (
+        handle: BrowserWorkspaceFileHandle,
+        parent: BrowserWorkspaceDirectoryHandle,
+        name: string,
+      ): Promise<void> => {
+        this.assertGeneration(generation, linked.signal);
+        const file = await handle.getFile();
+        this.assertGeneration(generation, linked.signal);
+        if (await this.nativeEntryExists(parent, name, generation, linked.signal))
+          throw new DOMException("Copy target already exists", "InvalidModificationError");
+        const destination = await parent.getFileHandle!(name, { create: true });
+        this.assertGeneration(generation, linked.signal);
+        if (!destination.createWritable) throw new DOMException("Target is read only", "NotSupportedError");
+        const writer = await destination.createWritable();
+        try {
+          this.assertGeneration(generation, linked.signal);
+          await writer.write(file);
+          this.assertGeneration(generation, linked.signal);
+          await writer.close();
+          this.assertGeneration(generation, linked.signal);
+        } catch (error) {
+          await writer.abort?.().catch(() => undefined);
+          throw error;
+        }
+        const latest = await handle.getFile();
+        if (latest.size !== file.size || latest.lastModified !== file.lastModified)
+          throw new DOMException("Source changed while moving", "InvalidStateError");
+      };
+      if (originalFile) await copy(originalFile, targetParent, targetParts.at(-1)!);
+      else {
+        const original = await sourceParent.getDirectoryHandle!(sourceParts.at(-1)!);
+        const before = await collectDirectory(
+          original,
+          { ...this.limits, includeHidden: true, ignoredDirectoryNames: new Set() },
+          linked.signal,
+        );
+        this.assertGeneration(generation, linked.signal);
+        const destination = await targetParent.getDirectoryHandle!(targetParts.at(-1)!, { create: true });
+        for (const path of before.directories) {
+          let parent = destination;
+          const parts = path.split("/");
+          for (const name of parts.slice(0, -1)) {
+            this.assertGeneration(generation, linked.signal);
+            parent = await parent.getDirectoryHandle!(name);
+          }
+          const name = parts.at(-1)!;
+          if (await this.nativeEntryExists(parent, name, generation, linked.signal))
+            throw new DOMException("Copy target already exists", "InvalidModificationError");
+          this.assertGeneration(generation, linked.signal);
+          await parent.getDirectoryHandle!(name, { create: true });
+          this.assertGeneration(generation, linked.signal);
+        }
+        for (const [path, entry] of before.entries) {
+          let parent = destination;
+          for (const name of path.split("/").slice(0, -1)) parent = await parent.getDirectoryHandle!(name);
+          await copy(entry.handle!, parent, path.split("/").at(-1)!);
+        }
+        const after = await collectDirectory(
+          original,
+          { ...this.limits, includeHidden: true, ignoredDirectoryNames: new Set() },
+          linked.signal,
+        );
+        if (
+          !mapsEqual(before.entries, after.entries) ||
+          JSON.stringify(before.directories) !== JSON.stringify(after.directories)
+        )
+          throw new DOMException("Source changed while moving", "InvalidStateError");
+      }
+      this.assertGeneration(generation, linked.signal);
+      if (removeOriginal) await sourceParent.removeEntry!(sourceParts.at(-1)!, { recursive: !originalFile });
+      this.assertGeneration(generation, linked.signal);
+      return await this.refresh({ signal: linked.signal });
+    } finally {
+      linked.dispose();
+    }
+  }
+
+  /** Resolve with the host's actual naming rules, including case/Unicode aliases. */
+  private async nativeEntryExists(
+    parent: BrowserWorkspaceDirectoryHandle,
+    name: string,
+    generation: number,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    if (!parent.getFileHandle || !parent.getDirectoryHandle)
+      throw new DOMException("Native entry lookup is unavailable", "NotSupportedError");
+    let mismatched = false;
+    for (const lookup of [
+      () => parent.getFileHandle!(name, { create: false }),
+      () => parent.getDirectoryHandle!(name, { create: false }),
+    ]) {
+      this.assertGeneration(generation, signal);
+      try {
+        await settleWithAbort<BrowserWorkspaceFileHandle | BrowserWorkspaceDirectoryHandle>(lookup(), signal);
+        this.assertGeneration(generation, signal);
+        return true;
+      } catch (error) {
+        this.assertGeneration(generation, signal);
+        if (error instanceof DOMException && error.name === "NotFoundError") continue;
+        if (error instanceof DOMException && error.name === "TypeMismatchError") {
+          mismatched = true;
+          continue;
+        }
+        throw error;
+      }
+    }
+    // A type mismatch observed an existing entry even if it disappears between probes.
+    return mismatched;
+  }
+
+  private assertNativePathIncluded(path: string): void {
+    if (
+      (!this.limits.includeHidden && hiddenPath(path)) ||
+      path.split("/").some((name) => this.limits.ignoredDirectoryNames.has(name.toLocaleLowerCase()))
+    )
+      throw new TypeError(`Workspace path is excluded: ${path}`);
+  }
+
+  private async nativeDirectory(
+    path: string,
+    create: boolean,
+    generation: number,
+    signal: AbortSignal,
+  ): Promise<BrowserWorkspaceDirectoryHandle> {
+    const root = this.root;
+    if (!root?.getDirectoryHandle || !root.getFileHandle)
+      throw new DOMException("Native folder operations are unavailable", "NotSupportedError");
+    await ensureWritePermission(root, signal);
+    this.assertGeneration(generation, signal);
+    const parts = path ? normalizeBrowserWorkspacePath(path).split("/") : [];
+    if (path) this.assertNativePathIncluded(parts.join("/"));
+    if (
+      parts.length > this.limits.maxDepth ||
+      (!this.limits.includeHidden && parts.some((name) => name.startsWith(".")))
+    )
+      throw new TypeError("Directory path is excluded");
+    let directory = root;
+    for (const part of parts) {
+      this.assertGeneration(generation, signal);
+      directory = await directory.getDirectoryHandle!(part, { create });
+      this.assertGeneration(generation, signal);
+    }
+    return directory;
   }
 
   async url(reference: string, options: AltairBrowserWorkspaceReadOptions = {}): Promise<string> {
@@ -878,6 +1193,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     const revision = this.state.revision + 1;
     this.revokeAllUrls();
     this.entries.clear();
+    this.directories = [];
     this.root = undefined;
     this.state = emptySnapshot(revision);
     for (const dispose of [...this.watchers]) dispose();
@@ -893,6 +1209,7 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     this.revokeAllUrls();
     void this.persistence?.dispose?.();
     this.entries.clear();
+    this.directories = [];
     this.root = undefined;
     this.state = emptySnapshot(this.state.revision + 1);
     this.emit({ type: "clear", snapshot: this.state });
@@ -904,12 +1221,14 @@ export class BrowserWorkspaceService implements AltairBrowserWorkspaceService {
     source: Exclude<AltairBrowserWorkspaceSource, "empty">,
     entries: Map<string, WorkspaceEntry>,
     root?: BrowserWorkspaceDirectoryHandle,
+    directories: readonly string[] = [],
   ): AltairBrowserWorkspaceSnapshot {
     this.revokeAllUrls();
     for (const dispose of [...this.watchers]) dispose();
     this.entries = entries;
+    this.directories = directories;
     this.root = root;
-    this.state = snapshot(this.workspaceId(), name || "Workspace", source, 1, entries);
+    this.state = snapshot(this.workspaceId(), name || "Workspace", source, 1, entries, directories);
     this.emit({ type: "replace", snapshot: this.state });
     return this.state;
   }

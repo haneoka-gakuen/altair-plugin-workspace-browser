@@ -18,6 +18,7 @@ export interface AltairBrowserWorkspaceSnapshot {
   readonly source: AltairBrowserWorkspaceSource;
   readonly revision: number;
   readonly files: readonly AltairBrowserWorkspaceFile[];
+  readonly directories?: readonly string[];
 }
 
 export type AltairBrowserWorkspaceEventType = "replace" | "refresh" | "clear" | "error";
@@ -66,6 +67,7 @@ export interface AltairBrowserWorkspaceReadOptions {
 export interface AltairBrowserWorkspaceWriteOptions extends AltairBrowserWorkspaceReadOptions {
   /** Create a missing file and intermediate directories when supported. */
   readonly create?: boolean;
+  readonly exclusive?: boolean;
 }
 
 export type AltairBrowserWorkspaceWriteData = string | Blob | ArrayBuffer | ArrayBufferView;
@@ -77,6 +79,7 @@ export interface AltairBrowserWorkspaceWatchOptions {
 
 export interface AltairBrowserWorkspaceLimits {
   readonly maxDepth?: number;
+  /** Collected files and descendant directories are each bounded by this value. */
   readonly maxFiles?: number;
   readonly maxTotalBytes?: number;
   readonly includeHidden?: boolean;
@@ -127,6 +130,19 @@ export interface AltairBrowserWorkspaceService extends AltairBrowserWorkspaceDis
     data: AltairBrowserWorkspaceWriteData,
     options?: AltairBrowserWorkspaceWriteOptions,
   ): Promise<AltairBrowserWorkspaceFile>;
+  mkdir?(path: string, options?: AltairBrowserWorkspaceReadOptions): Promise<void>;
+  exists?(path: string, options?: AltairBrowserWorkspaceReadOptions): Promise<boolean>;
+  remove?(path: string, options?: AltairBrowserWorkspaceReadOptions & {
+    readonly recursive?: boolean;
+    /** Require the complete source tree to match a backed-up snapshot before deletion. */
+    readonly expected?: { readonly files: readonly AltairBrowserWorkspaceFile[]; readonly directories: readonly string[] };
+  }): Promise<void>;
+  rename?(
+    source: string,
+    target: string,
+    options?: AltairBrowserWorkspaceReadOptions,
+  ): Promise<AltairBrowserWorkspaceSnapshot>;
+  copy?(source: string, target: string, options?: AltairBrowserWorkspaceReadOptions): Promise<AltairBrowserWorkspaceSnapshot>;
   url(reference: string, options?: AltairBrowserWorkspaceReadOptions): Promise<string>;
   subscribe(listener: AltairBrowserWorkspaceListener): () => void;
   watch(options?: AltairBrowserWorkspaceWatchOptions): AltairBrowserWorkspaceDisposable;
