@@ -8,6 +8,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: {
+        archive: resolve(root, "src/archive.ts"),
         assets: resolve(root, "src/assets.ts"),
         environment: resolve(root, "src/environment.ts"),
         index: resolve(root, "src/index.ts"),
@@ -19,7 +20,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: (id) => id === "@haneoka/altair" || id.startsWith("@haneoka/altair/"),
+      external: (id) => id === "fflate" || id === "@haneoka/altair" || id.startsWith("@haneoka/altair/"),
     },
     sourcemap: true,
     target: "es2022",

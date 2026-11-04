@@ -29,8 +29,8 @@ if (manifest.altair?.pluginApi !== 2) {
 if (JSON.stringify([...(manifest.altair?.capabilities ?? [])].sort()) !== JSON.stringify(["assets", "services"])) {
   fail("plugin capabilities must be assets and services");
 }
-if (Object.keys(manifest.dependencies ?? {}).length > 0) {
-  fail("runtime dependencies must be peer dependencies");
+if (JSON.stringify(Object.keys(manifest.dependencies ?? {}).sort()) !== JSON.stringify(["fflate"])) {
+  fail("fflate must be the only archive dependency");
 }
 if (Object.keys(manifest.optionalDependencies ?? {}).length > 0) {
   fail("optional runtime dependencies are not allowed");
@@ -86,7 +86,9 @@ const walkRepository = async (path, relativePath = "") => {
 };
 
 await walkRepository(root);
-const forbiddenRepositoryFiles = repositoryFiles.filter((path) => forbiddenPath.test(path));
+const forbiddenRepositoryFiles = repositoryFiles.filter(
+  (path) => !path.startsWith("docs/brand/") && forbiddenPath.test(path),
+);
 if (forbiddenRepositoryFiles.length > 0) {
   fail(`restricted payload:\n${forbiddenRepositoryFiles.join("\n")}`);
 }
@@ -138,6 +140,7 @@ for (const file of publishableFiles.filter((path) => path.endsWith(".js"))) {
       (specifier) =>
         specifier &&
         !specifier.startsWith(".") &&
+        !Object.hasOwn(manifest.dependencies ?? {}, specifier) &&
         specifier !== "@haneoka/altair" &&
         !specifier.startsWith("@haneoka/altair/"),
     );

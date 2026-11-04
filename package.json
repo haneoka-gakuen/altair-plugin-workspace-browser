@@ -61,7 +61,12 @@
       "import": "./dist/workspace.js",
       "default": "./dist/workspace.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./archive": {
+      "types": "./dist/archive.d.ts",
+      "import": "./dist/archive.js",
+      "default": "./dist/archive.js"
+    }
   },
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
@@ -111,5 +116,8 @@
       "android",
       "ios"
     ]
+  },
+  "dependencies": {
+    "fflate": "^0.8.3"
   }
 }
