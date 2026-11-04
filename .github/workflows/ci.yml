@@ -30,6 +30,7 @@ jobs:
           repository: haneoka-gakuen/altair
           path: altair-plugin-workspace-browser/.dependencies/altair
           persist-credentials: false
+          ref: cd4e44d0670df22fe2e8f8ae3ebab3ab8365766d
 
       - name: Check out Vega
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,6 +38,7 @@ jobs:
           repository: haneoka-gakuen/vega
           path: altair-plugin-workspace-browser/.dependencies/vega
           persist-credentials: false
+          ref: 2fa1b39c1176852db38a45b453c737e8e3439f5d
 
       - name: Check out portable Vega UI
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,12 +46,14 @@ jobs:
           repository: haneoka-gakuen/vega-ui-portable
           path: altair-plugin-workspace-browser/.dependencies/vega-ui-portable
           persist-credentials: false
+          ref: 06af193c1c7c7939394469aec5e7cfa7e71b220d
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: haneoka-gakuen/vega-plugin-richtext
           path: altair-plugin-workspace-browser/.dependencies/vega-plugin-richtext
           persist-credentials: false
+          ref: c043823cbb2c63a6966343db2e9ef0fb8ba4b703
       - name: Set up pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
