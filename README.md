@@ -20,11 +20,6 @@ pnpm add @haneoka/altair @haneoka/altair-plugin-workspace-browser
 ESM only. Folder access uses the File System Access API (Chromium-based
 browsers); other browsers use the file-input fallback.
 
-The `./archive` export writes project and game ZIPs with bounded streaming reads.
-Compressed entries use the browser's `CompressionStream("deflate-raw")`; fflate
-writes ZIP headers, sizes and CRCs. Individual files stay below the 2 GB project
-limit, and archive paths and entry counts are checked before writing.
-
 ## Use it in Altair
 
 ```ts
@@ -49,13 +44,13 @@ open folder.
 
 ## Opening a workspace
 
-| Method                     | What it does                                                        |
-| -------------------------- | ------------------------------------------------------------------- |
-| `pickDirectory()`          | Shows the folder picker and reads the folder. Needs a user gesture. |
-| `pickFiles()`              | Shows the file picker, or a file input where there is no picker.    |
-| `ingestFiles(files)`       | Uses files you already have, for example from drag and drop.        |
-| `connectDirectory(handle)` | Reconnects a folder handle restored by your app.                    |
-| `refresh()` / `clear()`    | Re-read the source, or close it.                                    |
+| Method | What it does |
+| --- | --- |
+| `pickDirectory()` | Shows the folder picker and reads the folder. Needs a user gesture. |
+| `pickFiles()` | Shows the file picker, or a file input where there is no picker. |
+| `ingestFiles(files)` | Uses files you already have, for example from drag and drop. |
+| `connectDirectory(handle)` | Reconnects a folder handle restored by your app. |
+| `refresh()` / `clear()` | Re-read the source, or close it. |
 
 `workspace.capabilities` tells you what the current browser supports:
 `directoryPicker`, `openFilePicker`, `fileInput`, `objectUrls` and `writable`.
@@ -67,13 +62,13 @@ modification time) and the directories.
 
 ## Reading and writing
 
-| Method                                        | Description                                                                     |
-| --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `match(path)`                                 | Finds a file in the snapshot.                                                   |
-| `file(path)` / `read(path)`                   | The file as a `File` or as bytes.                                               |
-| `url(path)`                                   | An object URL for previews; released when the workspace changes or is disposed. |
-| `write(path, data, { create })`               | Writes text, a `Blob` or bytes. `create` makes missing folders.                 |
-| `mkdir`, `exists`, `remove`, `rename`, `copy` | Available when the source is a writable folder.                                 |
+| Method | Description |
+| --- | --- |
+| `match(path)` | Finds a file in the snapshot. |
+| `file(path)` / `read(path)` | The file as a `File` or as bytes. |
+| `url(path)` | An object URL for previews; released when the workspace changes or is disposed. |
+| `write(path, data, { create })` | Writes text, a `Blob` or bytes. `create` makes missing folders. |
+| `mkdir`, `exists`, `remove`, `rename`, `copy` | Available when the source is a writable folder. |
 
 `remove(path, { recursive, expected })` can be given the snapshot you backed
 up; the folder is only deleted if its contents still match it exactly.
@@ -122,12 +117,12 @@ browser wants it confirmed again.
 
 ## Limits and safety
 
-| Option                  | Default                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `maxDepth`              | 32 folder levels                                                       |
-| `maxFiles`              | 20 000 files (and 20 000 folders)                                      |
-| `maxTotalBytes`         | 8 GiB                                                                  |
-| `includeHidden`         | `false` — dot-files are skipped                                        |
+| Option | Default |
+| --- | --- |
+| `maxDepth` | 32 folder levels |
+| `maxFiles` | 20 000 files (and 20 000 folders) |
+| `maxTotalBytes` | 8 GiB |
+| `includeHidden` | `false` — dot-files are skipped |
 | `ignoredDirectoryNames` | `.git`, `.nuxt`, `.output`, `build`, `dist`, `node_modules`, `release` |
 
 Pass them to `createAltairWorkspaceBrowserPlugin`. Paths are always relative
